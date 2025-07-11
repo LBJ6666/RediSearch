@@ -1,0 +1,58 @@
+# 文件：.github/workflows/windows-build.yml
+
+name: Build RediSearch on Windows
+
+# 在 push 到 main 分支或提交 PR 时触发
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    # 使用 GitHub 托管的 Windows Runner
+    runs-on: windows-latest  # Windows Server 2019/2022 均可 :contentReference[oaicite:0]{index=0}
+
+    steps:
+      # 1. 签出代码
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # 2. 安装并更新 MSYS2 环境
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-jemalloc
+            mingw-w64-x86_64-hiredis  # RediSearch 推荐依赖 :contentReference[oaicite:1]{index=1}
+
+      # 3. 在 MSYS2 Shell 下执行构建
+      - name: Build Redisearch.dll
+        # 默认在 MinGW-w64 64-bit 环境
+        shell: msys2 {0}
+        run: |
+          # 进入源代码目录（actions/checkout 会把代码拉到工作区根）
+          cd RediSearch
+          mkdir -p build && cd build
+
+          # 生成 Ninja build 文件并编译 Release 版
+          cmake .. \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_WITH_HIREDIS=ON \
+            -DJEMALLOC_USE_SHARED=ON
+
+          ninja
+
+      # 4. 上传编译产物，供后续下载
+      - name: Upload redisearch.dll
+        uses: actions/upload-artifact@v3
+        with:
+          name: redisearch-windows
+          path: |
+            RediSearch/build/bin/redisearch.dll
